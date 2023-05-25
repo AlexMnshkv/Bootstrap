@@ -1,0 +1,239 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[1]:
+
+
+import numpy as np
+import pandas as pd
+from scipy.stats import norm
+import matplotlib.pyplot as plt
+
+from tqdm.auto import tqdm
+
+plt.style.use('ggplot')
+
+from datetime import timedelta
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import seaborn as sns
+import matplotlib.pyplot as plt
+get_ipython().run_line_magic('matplotlib', 'inline')
+import plotly.express as px
+import re
+from io import BytesIO
+import requests
+import json
+from urllib.parse import urlencode
+import gspread
+import pingouin as pg
+from pingouin import multivariate_normality
+import math as math
+import scipy as scipy
+import scipy.stats as stats
+from df2gspread import df2gspread as d2g
+from oauth2client.service_account import ServiceAccountCredentials 
+df=pd.read_csv('/mnt/HC_Volume_18315164/home-jupyter/jupyter-a-/Stat_less9/hw_bootstrap.csv', sep=';')
+
+
+# In[2]:
+
+
+df
+
+
+# In[3]:
+
+
+df['value']=df.value.str.replace(',','.')
+df['value']=df.value.astype(float)
+df
+
+
+# In[4]:
+
+
+df.dtypes
+
+
+# In[5]:
+
+
+df_control=df.query('experimentVariant=="Control"')
+df_control
+
+
+# In[6]:
+
+
+sns.distplot(df_control.value, hist=True, kde=False,color = 'blue',
+             hist_kws={'edgecolor':'black'})
+
+
+# In[7]:
+
+
+df_test=df.query('experimentVariant=="Treatment"')
+df_test
+
+
+# In[8]:
+
+
+sns.distplot(df_test.value, hist=True, kde=False,color = 'blue',
+             hist_kws={'edgecolor':'black'})
+
+
+# In[9]:
+
+
+logo_test=np.log(df_test.value)
+
+
+# In[10]:
+
+
+logo_control=np.log(df_control.value)
+
+
+# In[11]:
+
+
+sns.distplot(logo_test, hist=True, kde=False,color = 'blue',
+             hist_kws={'edgecolor':'black'})
+
+
+# In[12]:
+
+
+df_control.value
+
+
+# In[13]:
+
+
+df_test.value
+
+
+# In[14]:
+
+
+#t-тест
+from scipy import stats
+stats.ttest_ind(df_control.value, df_test.value)
+
+#p-value меньше 0.05, поэтому мы отклоняем нулевую гипотезу и делаем вывод, что средние в группах значимо различаются.
+
+
+# In[15]:
+
+
+#U-тест
+import scipy.stats as stats
+stats.mannwhitneyu(df_control.value, df_test.value)
+
+
+# In[16]:
+
+
+#t-test log
+
+stats.ttest_ind(logo_control, logo_test)
+
+
+# In[17]:
+
+
+#U-тест log
+import scipy.stats as stats
+stats.mannwhitneyu(logo_control, logo_test)
+
+
+# In[18]:
+
+
+#Bootstrap
+def get_bootstrap(
+    data_column_1, # числовые значения первой выборки
+    data_column_2, # числовые значения второй выборки
+    boot_it = 1000, # количество бутстрэп-подвыборок
+    statistic = np.mean, # интересующая нас статистика
+    bootstrap_conf_level = 0.95 # уровень значимости
+):
+    boot_data = []
+    for i in tqdm(range(boot_it)): # извлекаем подвыборки
+        samples_1 = data_column_1.sample(
+            len(data_column_1), 
+            replace = True # параметр возвращения
+        ).values
+        
+        samples_2 = data_column_2.sample(
+            len(data_column_1), 
+            replace = True
+        ).values
+        
+        boot_data.append(statistic(samples_1)-statistic(samples_2)) # mean() - применяем статистику
+        
+    pd_boot_data = pd.DataFrame(boot_data)
+        
+    left_quant = (1 - bootstrap_conf_level)/2
+    right_quant = 1 - (1 - bootstrap_conf_level) / 2
+    quants = pd_boot_data.quantile([left_quant, right_quant])
+        
+    p_1 = norm.cdf(
+        x = 0, 
+        loc = np.mean(boot_data), 
+        scale = np.std(boot_data)
+    )
+    p_2 = norm.cdf(
+        x = 0, 
+        loc = -np.mean(boot_data), 
+        scale = np.std(boot_data)
+    )
+    p_value = min(p_1, p_2) * 2
+        
+    # Визуализация
+    _, _, bars = plt.hist(pd_boot_data[0], bins = 50)
+    for bar in bars:
+        if bar.get_x() <= quants.iloc[0][0] or bar.get_x() >= quants.iloc[1][0]:
+            bar.set_facecolor('red')
+        else: 
+            bar.set_facecolor('grey')
+            bar.set_edgecolor('black')
+    
+    plt.style.use('ggplot')
+    plt.vlines(quants,ymin=0,ymax=50,linestyle='--')
+    plt.xlabel('boot_data')
+    plt.ylabel('frequency')
+    plt.title("Histogram of boot_data")
+    plt.show()
+       
+    return {"boot_data": boot_data, 
+            "quants": quants, 
+            "p_value": p_value}
+
+
+# In[19]:
+
+
+booted_data = get_bootstrap(df_control.value, df_test.value)
+booted_data
+
+
+# In[20]:
+
+
+booted_data["p_value"]
+
+
+# In[21]:
+
+
+booted_data["quants"] 
+
+
+# In[ ]:
+
+
+
+
